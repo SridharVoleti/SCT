@@ -26,6 +26,11 @@ productPicker.addEventListener('change',()=>{
 });
 let landmarker=null, faceLandmarker=null, enabled=false, generation=0, lastVideoTime=-1, lastTrack=0, pose=null, facePose=null;
 const collarSlider=document.getElementById('collar-offset');
+const sizeSlider=document.getElementById('necklace-size');
+const positionValue=document.getElementById('collar-value');
+const sizeValue=document.getElementById('size-value');
+function refreshCalibration(){positionValue.textContent=collarSlider.value+'%';sizeValue.textContent=sizeSlider.value+'%'}
+collarSlider.addEventListener('input',refreshCalibration);sizeSlider.addEventListener('input',refreshCalibration);refreshCalibration();
 function clear(){ctx.clearRect(0,0,canvas.width,canvas.height)}
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.setTransform(dpr,0,0,dpr,0,0);return {w:r.width,h:r.height}}
 function point(p,w,h){const vw=video.videoWidth,vh=video.videoHeight;const scale=Math.min(w/vw,h/vh);const dw=vw*scale,dh=vh*scale;return {x:(w-dw)/2+(1-p.x)*dw,y:(h-dh)/2+p.y*dh}}
@@ -43,7 +48,7 @@ function drawNecklace(landmarks,faceLandmarks,w,h){
  // The top of the product must sit at the upper chest, never across the face.
  const collarAdjustment=Number(collarSlider.value)/100;
  const topY=Math.max(shoulderY+span*(.12+collarAdjustment),jaw.y+span*.30);
- const target={x:shoulderX,y:topY,width:span*.88,angle:Math.atan2(b.y-a.y,b.x-a.x)};
+ const target={x:shoulderX,y:topY,width:span*.88*(Number(sizeSlider.value)/100),angle:Math.atan2(b.y-a.y,b.x-a.x)};
  if(!smooth)smooth=target;
  else{
   const alpha=.12;
