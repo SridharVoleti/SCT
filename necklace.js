@@ -1,6 +1,6 @@
 // SCT-002: On-device pose tracking and a sample necklace overlay.
 // Load the AI dependency only after a user taps the button. A blocked CDN must not disable the UI.
-let PoseLandmarker, FilesetResolver;
+import {PoseLandmarker, FilesetResolver} from '@mediapipe/tasks-vision';
 const video=document.getElementById('camera');
 const canvas=document.getElementById('necklace-overlay');
 const toggle=document.getElementById('necklace-toggle');
@@ -32,17 +32,9 @@ function drawNecklace(landmarks,w,h){
 let loadStage='idle';
 async function load(){
  if(landmarker)return landmarker;
- if(!PoseLandmarker){
-  loadStage='library';hint.textContent='Loading tracking library…';
-  let lastError;
-  for(const url of ['https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm','https://esm.sh/@mediapipe/tasks-vision@0.10.22']){
-   try{const sdk=await import(url);if(!sdk.PoseLandmarker||!sdk.FilesetResolver)throw Error('Missing exports');PoseLandmarker=sdk.PoseLandmarker;FilesetResolver=sdk.FilesetResolver;break}catch(e){lastError=e}
-  }
-  if(!PoseLandmarker)throw Error('Library unavailable: '+(lastError?.message||'unknown'));
- }
  loadStage='wasm';hint.textContent='Loading tracking engine…';
  let vision,lastError;
- for(const path of ['https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm','https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm']){
+ for(const path of ['/wasm']){
   try{vision=await FilesetResolver.forVisionTasks(path);break}catch(e){lastError=e}
  }
  if(!vision)throw Error('Tracking engine unavailable: '+(lastError?.message||'unknown'));
