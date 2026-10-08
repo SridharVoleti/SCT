@@ -11,7 +11,7 @@ let productReady=false;
 productImage.onload=()=>{productReady=true;hint.textContent='Necklace image ready'};
 productImage.onerror=()=>{productReady=false};
 const storedImage=localStorage.getItem('sct-necklace-image');
-productImage.src=storedImage||'./products/necklace-001.png';
+productImage.src=storedImage||'./necklace-001.png';
 const productPicker=document.getElementById('product-picker');
 productPicker.addEventListener('change',()=>{
  const file=productPicker.files?.[0];if(!file)return;
