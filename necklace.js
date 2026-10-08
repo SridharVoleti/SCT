@@ -39,16 +39,18 @@ function clear(){ctx.clearRect(0,0,canvas.width,canvas.height)}
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.setTransform(dpr,0,0,dpr,0,0);return {w:r.width,h:r.height}}
 function point(p,w,h){const vw=video.videoWidth,vh=video.videoHeight;const scale=Math.min(w/vw,h/vh);const dw=vw*scale,dh=vh*scale;return {x:(w-dw)/2+(1-p.x)*dw,y:(h-dh)/2+p.y*dh}}
 // Shoulder landmarks are used for the neck position; all coordinates are mirrored to match video.
-let smooth=null;
+let smooth=null, lastGoodTrack=0;
+const TRACK_HOLD_MS=320;
+function renderNecklace(){if(!smooth||!productReady)return false;const imageWidth=smooth.width;const imageHeight=imageWidth*productImage.naturalHeight/productImage.naturalWidth;ctx.save();ctx.translate(smooth.x,smooth.y);ctx.rotate(smooth.angle);ctx.drawImage(productImage,-imageWidth/2,0,imageWidth,imageHeight);ctx.restore();return true;}
 function drawNecklace(landmarks,faceLandmarks,w,h){
  const left=landmarks[11],right=landmarks[12],nose=landmarks[0],chin=faceLandmarks?.[152];
- if(!left||!right||!nose||!chin||Math.min(left.visibility??1,right.visibility??1,nose.visibility??1)<.65){smooth=null;return false}
+ if(!left||!right||!nose||!chin||Math.min(left.visibility??1,right.visibility??1,nose.visibility??1)<.65)return false;
  const a=point(left,w,h),b=point(right,w,h),face=point(nose,w,h),jaw=point(chin,w,h);
  const span=Math.hypot(b.x-a.x,b.y-a.y);
  const shoulderY=(a.y+b.y)/2,shoulderX=(a.x+b.x)/2;
- if(span<65||!productReady||!Number.isFinite(span)){smooth=null;return false}
+ if(span<65||!productReady||!Number.isFinite(span))return false;
  // A shoulder estimate above the face is not a reliable neckline.
- if(shoulderY<=jaw.y+span*.06){smooth=null;return false}
+ if(shoulderY<=jaw.y+span*.06)return false;
  // The top of the product must sit at the upper chest, never across the face.
  // Signed vertical calibration: -500 moves up by one shoulder span, +500 down.
  // Do not clamp against chin: it would defeat the user's manual adjustment.
@@ -60,18 +62,18 @@ function drawNecklace(landmarks,faceLandmarks,w,h){
  // Horizontal offset follows the person's body and rotates with their shoulders.
  const horizontalAdjustment=span*Number(horizontalSlider.value)/100;
  const target={x:shoulderX+Math.cos(clampedAngle)*horizontalAdjustment,y:topY+Math.sin(clampedAngle)*horizontalAdjustment,width:span*.88*(Number(sizeSlider.value)/100),angle:clampedAngle};
- if(!smooth)smooth=target;
+ if(!smooth)smooth={...target};
  else{
-  const alpha=.12;
-  // Reset instead of slowly drifting after a sudden detection jump.
-  if(Math.hypot(target.x-smooth.x,target.y-smooth.y)>span*.35)smooth=target;
-  else {for(const k of ['x','y','width'])smooth[k]+=alpha*(target[k]-smooth[k]);const angleDelta=Math.atan2(Math.sin(target.angle-smooth.angle),Math.cos(target.angle-smooth.angle));smooth.angle+=Math.max(-.035,Math.min(.035,angleDelta*.18));}
+  const distance=Math.hypot(target.x-smooth.x,target.y-smooth.y);
+  // Faster response to intentional movement, stronger filtering when nearly still.
+  const alpha=distance>span*.08?.30:.12;
+  const maxStep=Math.max(5,span*.12);
+  for(const k of ['x','y']){const delta=(target[k]-smooth[k])*alpha;smooth[k]+=Math.max(-maxStep,Math.min(maxStep,delta));}
+  smooth.width+=Math.max(-span*.08,Math.min(span*.08,(target.width-smooth.width)*.16));
+  const angleDelta=Math.atan2(Math.sin(target.angle-smooth.angle),Math.cos(target.angle-smooth.angle));
+  smooth.angle+=Math.max(-.035,Math.min(.035,angleDelta*.18));
  }
- const imageWidth=smooth.width;
- const imageHeight=imageWidth*productImage.naturalHeight/productImage.naturalWidth;
- ctx.save();ctx.translate(smooth.x,smooth.y);ctx.rotate(smooth.angle);
- ctx.drawImage(productImage,-imageWidth/2,0,imageWidth,imageHeight);
- ctx.restore();return true;
+ lastGoodTrack=performance.now();return renderNecklace();
 }
 let loadStage='idle';
 async function load(){
@@ -88,7 +90,7 @@ async function load(){
  faceLandmarker=await FaceLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:'CPU'},runningMode:'VIDEO',numFaces:1});
  loadStage='ready';return landmarker;
 }
-function loop(token){if(token!==generation||!enabled)return;const {w,h}=resize();clear();if(video.readyState>=2&&video.videoWidth){const now=performance.now();if(now-lastTrack>75&&video.currentTime!==lastVideoTime){lastTrack=now;lastVideoTime=video.currentTime;try{pose=landmarker.detectForVideo(video,now).landmarks?.[0]||null;facePose=faceLandmarker.detectForVideo(video,now).faceLandmarks?.[0]||null}catch(e){pose=null;facePose=null;hint.textContent='Tracking paused. Try restarting the mirror.'}}if(pose){const found=drawNecklace(pose,facePose,w,h);if(found)hint.textContent='Shreshta necklace · move slowly';else hint.textContent=productReady?'Move back: show your face, neck and both shoulders':'Necklace image not installed yet'}else hint.textContent='Move back so your face and shoulders are visible'}requestAnimationFrame(()=>loop(token))}
-function off(){enabled=false;generation++;pose=null;facePose=null;smooth=null;clear();toggle.textContent='Try Necklace';toggle.setAttribute('aria-pressed','false');hint.textContent=''}
+function loop(token){if(token!==generation||!enabled)return;const {w,h}=resize();clear();if(video.readyState>=2&&video.videoWidth){const now=performance.now();if(now-lastTrack>75&&video.currentTime!==lastVideoTime){lastTrack=now;lastVideoTime=video.currentTime;try{pose=landmarker.detectForVideo(video,now).landmarks?.[0]||null;facePose=faceLandmarker.detectForVideo(video,now).faceLandmarks?.[0]||null}catch(e){pose=null;facePose=null;hint.textContent='Tracking paused. Try restarting the mirror.'}}const found=pose?drawNecklace(pose,facePose,w,h):false;if(found)hint.textContent='Shreshta necklace · move slowly';else if(smooth&&now-lastGoodTrack<TRACK_HOLD_MS){renderNecklace();hint.textContent='Tracking…'}else{smooth=null;hint.textContent=productReady?'Move back: show your face, neck and both shoulders':'Necklace image not installed yet'}}requestAnimationFrame(()=>loop(token))}
+function off(){enabled=false;generation++;pose=null;facePose=null;smooth=null;lastGoodTrack=0;clear();toggle.textContent='Try Necklace';toggle.setAttribute('aria-pressed','false');hint.textContent=''}
 toggle.addEventListener('click',async()=>{if(enabled){off();return}if(!video.srcObject){hint.textContent='Start the mirror first';return}if(!productReady){hint.textContent='Tap Choose Necklace Image to add your product photo first';return}toggle.disabled=true;try{await load();if(!video.srcObject){off();return}enabled=true;generation++;toggle.textContent='Remove Necklace';toggle.setAttribute('aria-pressed','true');loop(generation)}catch(e){hint.textContent='Tracking failed at '+loadStage+': '+(e?.message||'unknown error');console.error('SCT-002 model loading failed',e)}finally{toggle.disabled=false}});
 document.getElementById('stop').addEventListener('click',off);document.addEventListener('visibilitychange',()=>{if(document.hidden)off()});window.addEventListener('pagehide',off);
