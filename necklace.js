@@ -5,6 +5,7 @@ const canvas=document.getElementById('necklace-overlay');
 const toggle=document.getElementById('necklace-toggle');
 const hint=document.getElementById('necklace-hint');
 const ctx=canvas.getContext('2d');
+const productImage=new Image();let productReady=false;productImage.onload=()=>{productReady=true};productImage.onerror=()=>{productReady=false};productImage.src='./products/necklace-001.png';
 let landmarker=null, enabled=false, generation=0, lastVideoTime=-1, lastTrack=0, pose=null;
 function clear(){ctx.clearRect(0,0,canvas.width,canvas.height)}
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.setTransform(dpr,0,0,dpr,0,0);return {w:r.width,h:r.height}}
@@ -16,6 +17,7 @@ function drawNecklace(landmarks,w,h){
  const width=Math.hypot(b.x-a.x,b.y-a.y);if(width<35)return false;
  const angle=Math.atan2(b.y-a.y,b.x-a.x);const size=width*.78;
  ctx.save();ctx.translate(cx,cy);ctx.rotate(angle);ctx.lineCap='round';
+ if(productReady){const imgWidth=size*1.18;const imgHeight=imgWidth*productImage.naturalHeight/productImage.naturalWidth;ctx.drawImage(productImage,-imgWidth/2,-size*.18,imgWidth,imgHeight);ctx.restore();return true;}
  // Curved gold chain, hanging from the approximate collar area.
  const top=-size*.10,bottom=size*.53;
  ctx.shadowColor='#b98738';ctx.shadowBlur=6;
@@ -27,7 +29,7 @@ function drawNecklace(landmarks,w,h){
  ctx.beginPath();ctx.ellipse(0,bottom+size*.14,size*.05,size*.075,0,0,Math.PI*2);ctx.fillStyle='#a52a50';ctx.fill();ctx.restore();return true;
 }
 async function load(){if(landmarker)return landmarker;hint.textContent='Loading necklace tracking…';const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');landmarker=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'CPU'},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.55,minTrackingConfidence:.5});return landmarker}
-function loop(token){if(token!==generation||!enabled)return;const {w,h}=resize();clear();if(video.readyState>=2&&video.videoWidth){const now=performance.now();if(now-lastTrack>75&&video.currentTime!==lastVideoTime){lastTrack=now;lastVideoTime=video.currentTime;try{pose=landmarker.detectForVideo(video,now).landmarks?.[0]||null}catch(e){pose=null;hint.textContent='Tracking paused. Try restarting the mirror.'}}if(pose){const found=drawNecklace(pose,w,h);if(found)hint.textContent='Sample necklace · move slowly';else hint.textContent='Keep your shoulders visible'}else hint.textContent='Move back so your face and shoulders are visible'}requestAnimationFrame(()=>loop(token))}
+function loop(token){if(token!==generation||!enabled)return;const {w,h}=resize();clear();if(video.readyState>=2&&video.videoWidth){const now=performance.now();if(now-lastTrack>75&&video.currentTime!==lastVideoTime){lastTrack=now;lastVideoTime=video.currentTime;try{pose=landmarker.detectForVideo(video,now).landmarks?.[0]||null}catch(e){pose=null;hint.textContent='Tracking paused. Try restarting the mirror.'}}if(pose){const found=drawNecklace(pose,w,h);if(found)hint.textContent=productReady?'Shreshta necklace · move slowly':'Sample necklace · product image pending';else hint.textContent='Keep your shoulders visible'}else hint.textContent='Move back so your face and shoulders are visible'}requestAnimationFrame(()=>loop(token))}
 function off(){enabled=false;generation++;pose=null;clear();toggle.textContent='Try Necklace';toggle.setAttribute('aria-pressed','false');hint.textContent=''}
 toggle.addEventListener('click',async()=>{if(enabled){off();return}if(!video.srcObject){hint.textContent='Start the mirror first';return}toggle.disabled=true;try{await load();if(!video.srcObject){off();return}enabled=true;generation++;toggle.textContent='Remove Necklace';toggle.setAttribute('aria-pressed','true');loop(generation)}catch(e){hint.textContent='Necklace tracking could not load. Check your internet connection.';console.error('SCT-002 model loading failed',e)}finally{toggle.disabled=false}});
 document.getElementById('stop').addEventListener('click',off);document.addEventListener('visibilitychange',()=>{if(document.hidden)off()});window.addEventListener('pagehide',off);
