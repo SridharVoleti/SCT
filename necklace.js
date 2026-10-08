@@ -48,13 +48,16 @@ function drawNecklace(landmarks,faceLandmarks,w,h){
  // The top of the product must sit at the upper chest, never across the face.
  const collarAdjustment=Number(collarSlider.value)/100;
  const topY=Math.max(shoulderY+span*(.12+collarAdjustment),jaw.y+span*.30);
- const target={x:shoulderX,y:topY,width:span*.88*(Number(sizeSlider.value)/100),angle:Math.atan2(b.y-a.y,b.x-a.x)};
+ const shoulderAngle=Math.atan2(b.y-a.y,b.x-a.x);
+ const normalizedAngle=Math.atan2(Math.sin(shoulderAngle),Math.cos(shoulderAngle));
+ const clampedAngle=Math.max(-Math.PI/9,Math.min(Math.PI/9,normalizedAngle));
+ const target={x:shoulderX,y:topY,width:span*.88*(Number(sizeSlider.value)/100),angle:clampedAngle};
  if(!smooth)smooth=target;
  else{
   const alpha=.12;
   // Reset instead of slowly drifting after a sudden detection jump.
   if(Math.hypot(target.x-smooth.x,target.y-smooth.y)>span*.35)smooth=target;
-  else for(const k of ['x','y','width','angle'])smooth[k]+=alpha*(target[k]-smooth[k]);
+  else {for(const k of ['x','y','width'])smooth[k]+=alpha*(target[k]-smooth[k]);const angleDelta=Math.atan2(Math.sin(target.angle-smooth.angle),Math.cos(target.angle-smooth.angle));smooth.angle+=Math.max(-.035,Math.min(.035,angleDelta*.18));}
  }
  const imageWidth=smooth.width;
  const imageHeight=imageWidth*productImage.naturalHeight/productImage.naturalWidth;
