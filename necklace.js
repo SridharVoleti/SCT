@@ -29,8 +29,28 @@ function drawNecklace(landmarks,w,h){
  ctx.beginPath();ctx.moveTo(0,bottom-size*.03);ctx.lineTo(-size*.12,bottom+size*.16);ctx.lineTo(0,bottom+size*.36);ctx.lineTo(size*.12,bottom+size*.16);ctx.closePath();ctx.fillStyle='#d5a643';ctx.fill();ctx.strokeStyle='#fff0aa';ctx.lineWidth=2;ctx.stroke();
  ctx.beginPath();ctx.ellipse(0,bottom+size*.14,size*.05,size*.075,0,0,Math.PI*2);ctx.fillStyle='#a52a50';ctx.fill();ctx.restore();return true;
 }
-async function load(){if(landmarker)return landmarker;hint.textContent='Loading necklace tracking…';if(!PoseLandmarker){const sdk=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');PoseLandmarker=sdk.PoseLandmarker;FilesetResolver=sdk.FilesetResolver}const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');landmarker=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'CPU'},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.55,minTrackingConfidence:.5});return landmarker}
+let loadStage='idle';
+async function load(){
+ if(landmarker)return landmarker;
+ if(!PoseLandmarker){
+  loadStage='library';hint.textContent='Loading tracking library…';
+  let lastError;
+  for(const url of ['https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm','https://esm.sh/@mediapipe/tasks-vision@0.10.22']){
+   try{const sdk=await import(url);if(!sdk.PoseLandmarker||!sdk.FilesetResolver)throw Error('Missing exports');PoseLandmarker=sdk.PoseLandmarker;FilesetResolver=sdk.FilesetResolver;break}catch(e){lastError=e}
+  }
+  if(!PoseLandmarker)throw Error('Library unavailable: '+(lastError?.message||'unknown'));
+ }
+ loadStage='wasm';hint.textContent='Loading tracking engine…';
+ let vision,lastError;
+ for(const path of ['https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm','https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm']){
+  try{vision=await FilesetResolver.forVisionTasks(path);break}catch(e){lastError=e}
+ }
+ if(!vision)throw Error('Tracking engine unavailable: '+(lastError?.message||'unknown'));
+ loadStage='model';hint.textContent='Loading pose model…';
+ landmarker=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'CPU'},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.55,minTrackingConfidence:.5});
+ loadStage='ready';return landmarker;
+}
 function loop(token){if(token!==generation||!enabled)return;const {w,h}=resize();clear();if(video.readyState>=2&&video.videoWidth){const now=performance.now();if(now-lastTrack>75&&video.currentTime!==lastVideoTime){lastTrack=now;lastVideoTime=video.currentTime;try{pose=landmarker.detectForVideo(video,now).landmarks?.[0]||null}catch(e){pose=null;hint.textContent='Tracking paused. Try restarting the mirror.'}}if(pose){const found=drawNecklace(pose,w,h);if(found)hint.textContent=productReady?'Shreshta necklace · move slowly':'Sample necklace · product image pending';else hint.textContent='Keep your shoulders visible'}else hint.textContent='Move back so your face and shoulders are visible'}requestAnimationFrame(()=>loop(token))}
 function off(){enabled=false;generation++;pose=null;clear();toggle.textContent='Try Necklace';toggle.setAttribute('aria-pressed','false');hint.textContent=''}
-toggle.addEventListener('click',async()=>{if(enabled){off();return}if(!video.srcObject){hint.textContent='Start the mirror first';return}toggle.disabled=true;try{await load();if(!video.srcObject){off();return}enabled=true;generation++;toggle.textContent='Remove Necklace';toggle.setAttribute('aria-pressed','true');loop(generation)}catch(e){hint.textContent='Necklace tracking could not load. Check your internet connection and reload the page.';console.error('SCT-002 model loading failed',e)}finally{toggle.disabled=false}});
+toggle.addEventListener('click',async()=>{if(enabled){off();return}if(!video.srcObject){hint.textContent='Start the mirror first';return}toggle.disabled=true;try{await load();if(!video.srcObject){off();return}enabled=true;generation++;toggle.textContent='Remove Necklace';toggle.setAttribute('aria-pressed','true');loop(generation)}catch(e){hint.textContent='Tracking failed at '+loadStage+': '+(e?.message||'unknown error');console.error('SCT-002 model loading failed',e)}finally{toggle.disabled=false}});
 document.getElementById('stop').addEventListener('click',off);document.addEventListener('visibilitychange',()=>{if(document.hidden)off()});window.addEventListener('pagehide',off);
