@@ -34,14 +34,16 @@ const collarSlider=document.getElementById('collar-offset');
 const sizeSlider=document.getElementById('necklace-size');
 const horizontalSlider=document.getElementById('horizontal-offset');
 const angleSlider=document.getElementById('angle-offset');
+const shoulderDebugSlider=document.getElementById('shoulder-debug-offset');
+const shoulderDebugValue=document.getElementById('shoulder-debug-value');
 const angleValue=document.getElementById('angle-value');
 const horizontalValue=document.getElementById('horizontal-value');
 const resetFit=document.getElementById('reset-fit');
 const positionValue=document.getElementById('collar-value');
 const sizeValue=document.getElementById('size-value');
-function refreshCalibration(){positionValue.textContent=collarSlider.value;sizeValue.textContent=sizeSlider.value+'%';horizontalValue.textContent=horizontalSlider.value+'%';angleValue.textContent=angleSlider.value+'°'}
-collarSlider.addEventListener('input',refreshCalibration);sizeSlider.addEventListener('input',refreshCalibration);horizontalSlider.addEventListener('input',refreshCalibration);angleSlider.addEventListener('input',refreshCalibration);
-resetFit.addEventListener('click',()=>{collarSlider.value='-210';sizeSlider.value='90';horizontalSlider.value='0';angleSlider.value='0';refreshCalibration()});refreshCalibration();
+function refreshCalibration(){positionValue.textContent=collarSlider.value;sizeValue.textContent=sizeSlider.value+'%';horizontalValue.textContent=horizontalSlider.value+'%';angleValue.textContent=angleSlider.value+'°';shoulderDebugValue.textContent=shoulderDebugSlider.value}
+collarSlider.addEventListener('input',refreshCalibration);sizeSlider.addEventListener('input',refreshCalibration);horizontalSlider.addEventListener('input',refreshCalibration);angleSlider.addEventListener('input',refreshCalibration);shoulderDebugSlider.addEventListener('input',refreshCalibration);
+resetFit.addEventListener('click',()=>{collarSlider.value='-210';sizeSlider.value='90';horizontalSlider.value='0';angleSlider.value='0';shoulderDebugSlider.value='0';refreshCalibration()});refreshCalibration();
 function clear(){ctx.clearRect(0,0,canvas.width,canvas.height);debugCtx.clearRect(0,0,debugCanvas.width,debugCanvas.height)}
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.setTransform(dpr,0,0,dpr,0,0);if(debugCanvas.width!==w||debugCanvas.height!==h){debugCanvas.width=w;debugCanvas.height=h}debugCtx.setTransform(dpr,0,0,dpr,0,0);return {w:r.width,h:r.height}}
 function point(p,w,h){const vw=video.videoWidth,vh=video.videoHeight;const scale=Math.min(w/vw,h/vh);const dw=vw*scale,dh=vh*scale;return {x:(w-dw)/2+(1-p.x)*dw,y:(h-dh)/2+p.y*dh}}
@@ -104,12 +106,14 @@ function drawTrackingDebug(w,h){
   const chin=facePose[152];if(chin){const p=point(chin,w,h);debugCtx.fillStyle='#ff8b49';debugCtx.beginPath();debugCtx.arc(p.x,p.y,4,0,Math.PI*2);debugCtx.fill()}
  }
  if(pose){
+  // Raw orange pose connections remain unmodified; calibrated line is drawn separately.
   drawEdges(pose,[{start:11,end:12},{start:11,end:13},{start:12,end:14}], '#ff9c46',2.5);
+  const la=pose[11],ra=pose[12];if(la&&ra){const a=point(la,w,h),b=point(ra,w,h);const span=Math.hypot(b.x-a.x,b.y-a.y);const offset=span*Number(shoulderDebugSlider.value)/500;debugCtx.beginPath();debugCtx.moveTo(a.x,a.y+offset);debugCtx.lineTo(b.x,b.y+offset);debugCtx.strokeStyle='#b98cff';debugCtx.lineWidth=3;debugCtx.stroke();}
   for(const id of [11,12]){const p=pose[id];if(!p)continue;const v=point(p,w,h);debugCtx.fillStyle='#ff9c46';debugCtx.beginPath();debugCtx.arc(v.x,v.y,5,0,Math.PI*2);debugCtx.fill()}
  }
  debugCtx.save();debugCtx.font='11px system-ui';debugCtx.fillStyle='#fff';debugCtx.shadowColor='#000';debugCtx.shadowBlur=4;
  debugCtx.fillText('Cyan: face mesh  Green: outline  Yellow: eyes',12,44);
- debugCtx.fillText('Pink: lips  Orange: chin/shoulders',12,59);
+ debugCtx.fillText('Pink: lips  Orange: raw shoulders  Purple: calibrated',12,59);
  debugCtx.restore();
 }
 
