@@ -6,7 +6,24 @@ const canvas=document.getElementById('necklace-overlay');
 const toggle=document.getElementById('necklace-toggle');
 const hint=document.getElementById('necklace-hint');
 const ctx=canvas.getContext('2d');
-const productImage=new Image();let productReady=false;productImage.onload=()=>{productReady=true};productImage.onerror=()=>{productReady=false};productImage.src='./products/necklace-001.png';
+const productImage=new Image();
+let productReady=false;
+productImage.onload=()=>{productReady=true;hint.textContent='Necklace image ready'};
+productImage.onerror=()=>{productReady=false};
+const storedImage=localStorage.getItem('sct-necklace-image');
+productImage.src=storedImage||'./products/necklace-001.png';
+const productPicker=document.getElementById('product-picker');
+productPicker.addEventListener('change',()=>{
+ const file=productPicker.files?.[0];if(!file)return;
+ if(!file.type.startsWith('image/')){hint.textContent='Choose a PNG or JPEG image';return}
+ if(file.size>4*1024*1024){hint.textContent='Choose an image smaller than 4 MB';return}
+ const reader=new FileReader();
+ reader.onload=()=>{
+  try{localStorage.setItem('sct-necklace-image',reader.result);productImage.src=reader.result;hint.textContent='Necklace saved on this device'}
+  catch(e){productImage.src=reader.result;hint.textContent='Necklace loaded for this session; device storage unavailable'}
+ };
+ reader.readAsDataURL(file);
+});
 let landmarker=null, enabled=false, generation=0, lastVideoTime=-1, lastTrack=0, pose=null;
 function clear(){ctx.clearRect(0,0,canvas.width,canvas.height)}
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.setTransform(dpr,0,0,dpr,0,0);return {w:r.width,h:r.height}}
@@ -47,5 +64,5 @@ async function load(){
 }
 function loop(token){if(token!==generation||!enabled)return;const {w,h}=resize();clear();if(video.readyState>=2&&video.videoWidth){const now=performance.now();if(now-lastTrack>75&&video.currentTime!==lastVideoTime){lastTrack=now;lastVideoTime=video.currentTime;try{pose=landmarker.detectForVideo(video,now).landmarks?.[0]||null}catch(e){pose=null;hint.textContent='Tracking paused. Try restarting the mirror.'}}if(pose){const found=drawNecklace(pose,w,h);if(found)hint.textContent='Shreshta necklace · move slowly';else hint.textContent=productReady?'Move back and keep both shoulders visible':'Necklace image not installed yet'}else hint.textContent='Move back so your face and shoulders are visible'}requestAnimationFrame(()=>loop(token))}
 function off(){enabled=false;generation++;pose=null;smooth=null;clear();toggle.textContent='Try Necklace';toggle.setAttribute('aria-pressed','false');hint.textContent=''}
-toggle.addEventListener('click',async()=>{if(enabled){off();return}if(!video.srcObject){hint.textContent='Start the mirror first';return}if(!productReady){hint.textContent='Product image is missing: products/necklace-001.png';return}toggle.disabled=true;try{await load();if(!video.srcObject){off();return}enabled=true;generation++;toggle.textContent='Remove Necklace';toggle.setAttribute('aria-pressed','true');loop(generation)}catch(e){hint.textContent='Tracking failed at '+loadStage+': '+(e?.message||'unknown error');console.error('SCT-002 model loading failed',e)}finally{toggle.disabled=false}});
+toggle.addEventListener('click',async()=>{if(enabled){off();return}if(!video.srcObject){hint.textContent='Start the mirror first';return}if(!productReady){hint.textContent='Tap Choose Necklace Image to add your product photo first';return}toggle.disabled=true;try{await load();if(!video.srcObject){off();return}enabled=true;generation++;toggle.textContent='Remove Necklace';toggle.setAttribute('aria-pressed','true');loop(generation)}catch(e){hint.textContent='Tracking failed at '+loadStage+': '+(e?.message||'unknown error');console.error('SCT-002 model loading failed',e)}finally{toggle.disabled=false}});
 document.getElementById('stop').addEventListener('click',off);document.addEventListener('visibilitychange',()=>{if(document.hidden)off()});window.addEventListener('pagehide',off);
