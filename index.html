@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16121a">
+<title>Shreshta Collections Tryon</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#141017;color:#fff;font-family:system-ui,-apple-system,sans-serif}main{height:100dvh;display:flex;flex-direction:column}header{padding:14px 18px;display:flex;justify-content:space-between;align-items:center;background:#1c1620}h1{font-size:18px;margin:0}small{color:#cbb8cc}.viewer{position:relative;flex:1;min-height:0;overflow:hidden;background:#09080a;display:grid;place-items:center}video{width:100%;height:100%;object-fit:contain;transform:scaleX(-1)}.placeholder{position:absolute;text-align:center;color:#d5c9d7;padding:24px;max-width:400px;pointer-events:none}.hidden{display:none}.status{position:absolute;top:16px;left:16px;background:#211927dd;padding:9px 12px;border-radius:30px;font-size:13px}footer{display:flex;gap:12px;justify-content:center;align-items:center;padding:16px;background:#1c1620}button{background:#d9b5cf;color:#1c1620;border:0;border-radius:12px;padding:14px 25px;font-size:16px;font-weight:700;min-height:48px}button.secondary{background:#39303c;color:white}button:disabled{opacity:.45}#error{color:#ffd0d0;max-width:500px;text-align:center;font-size:14px} @media(min-width:800px){h1{font-size:22px}}
+</style>
+</head>
+<body><main>
+<header><div><h1>Shreshta Collections <span style="color:#d9b5cf">TRYON</span></h1><small>Technology by Babysteps · SCT-001</small></div><span aria-hidden="true">✦</span></header>
+<section class="viewer" aria-label="Live camera mirror">
+<video id="camera" autoplay muted playsinline aria-label="Mirrored live camera"></video>
+<div id="placeholder" class="placeholder"><h2>Your virtual mirror</h2><p>Tap Start Mirror to use this tablet's front camera. Your video stays on this device.</p><p id="error" role="alert"></p></div>
+<div class="status" id="status" role="status">Camera off</div>
+</section>
+<footer><button id="start">Start Mirror</button><button id="stop" class="secondary" disabled>Stop</button></footer>
+</main>
+<script>
+const video=document.getElementById('camera'),start=document.getElementById('start'),stop=document.getElementById('stop'),status=document.getElementById('status'),placeholder=document.getElementById('placeholder'),error=document.getElementById('error');
+let stream=null,requestId=0;
+function halt(){requestId++;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}video.srcObject=null;video.classList.add('hidden');placeholder.classList.remove('hidden');status.textContent='Camera off';start.disabled=false;stop.disabled=true}
+async function begin(){halt();const id=++requestId;error.textContent='';start.disabled=true;status.textContent='Starting camera…';if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){error.textContent='Camera access requires HTTPS or localhost and a supported browser.';start.disabled=false;status.textContent='Unavailable';return}
+try{const next=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}}});if(id!==requestId){next.getTracks().forEach(t=>t.stop());return}stream=next;video.srcObject=stream;await video.play();if(id!==requestId)return;video.classList.remove('hidden');placeholder.classList.add('hidden');status.textContent='● Live mirror';stop.disabled=false;stream.getVideoTracks()[0]?.addEventListener('ended',()=>{if(stream===next)halt()})}catch(e){if(id!==requestId)return;halt();error.textContent=e.name==='NotAllowedError'?'Camera permission was denied. Allow camera access in Chrome settings and try again.':e.name==='NotFoundError'?'No usable camera was found.':'Unable to start camera. Close other camera apps and try again.'}}
+start.addEventListener('click',begin);stop.addEventListener('click',halt);document.addEventListener('visibilitychange',()=>{if(document.hidden)halt()});window.addEventListener('pagehide',halt);video.classList.add('hidden');
+</script></body></html>
