@@ -32,9 +32,9 @@ const horizontalValue=document.getElementById('horizontal-value');
 const resetFit=document.getElementById('reset-fit');
 const positionValue=document.getElementById('collar-value');
 const sizeValue=document.getElementById('size-value');
-function refreshCalibration(){positionValue.textContent=collarSlider.value+'%';sizeValue.textContent=sizeSlider.value+'%';horizontalValue.textContent=horizontalSlider.value+'%'}
+function refreshCalibration(){positionValue.textContent=collarSlider.value;sizeValue.textContent=sizeSlider.value+'%';horizontalValue.textContent=horizontalSlider.value+'%'}
 collarSlider.addEventListener('input',refreshCalibration);sizeSlider.addEventListener('input',refreshCalibration);horizontalSlider.addEventListener('input',refreshCalibration);
-resetFit.addEventListener('click',()=>{collarSlider.value='55';sizeSlider.value='100';horizontalSlider.value='0';refreshCalibration()});refreshCalibration();
+resetFit.addEventListener('click',()=>{collarSlider.value='0';sizeSlider.value='100';horizontalSlider.value='0';refreshCalibration()});refreshCalibration();
 function clear(){ctx.clearRect(0,0,canvas.width,canvas.height)}
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.setTransform(dpr,0,0,dpr,0,0);return {w:r.width,h:r.height}}
 function point(p,w,h){const vw=video.videoWidth,vh=video.videoHeight;const scale=Math.min(w/vw,h/vh);const dw=vw*scale,dh=vh*scale;return {x:(w-dw)/2+(1-p.x)*dw,y:(h-dh)/2+p.y*dh}}
@@ -50,8 +50,10 @@ function drawNecklace(landmarks,faceLandmarks,w,h){
  // A shoulder estimate above the face is not a reliable neckline.
  if(shoulderY<=jaw.y+span*.06){smooth=null;return false}
  // The top of the product must sit at the upper chest, never across the face.
- const collarAdjustment=Number(collarSlider.value)/100;
- const topY=Math.max(shoulderY+span*(.12+collarAdjustment),jaw.y+span*.30);
+ // Signed vertical calibration: -500 moves up by one shoulder span, +500 down.
+ // Do not clamp against chin: it would defeat the user's manual adjustment.
+ const collarAdjustment=Number(collarSlider.value)/500;
+ const topY=shoulderY+span*(.12+collarAdjustment);
  const shoulderAngle=Math.atan2(b.y-a.y,b.x-a.x);
  const normalizedAngle=Math.atan2(Math.sin(shoulderAngle),Math.cos(shoulderAngle));
  const clampedAngle=Math.max(-Math.PI/9,Math.min(Math.PI/9,normalizedAngle));
