@@ -34,7 +34,7 @@ const positionValue=document.getElementById('collar-value');
 const sizeValue=document.getElementById('size-value');
 function refreshCalibration(){positionValue.textContent=collarSlider.value;sizeValue.textContent=sizeSlider.value+'%';horizontalValue.textContent=horizontalSlider.value+'%'}
 collarSlider.addEventListener('input',refreshCalibration);sizeSlider.addEventListener('input',refreshCalibration);horizontalSlider.addEventListener('input',refreshCalibration);
-resetFit.addEventListener('click',()=>{collarSlider.value='0';sizeSlider.value='100';horizontalSlider.value='0';refreshCalibration()});refreshCalibration();
+resetFit.addEventListener('click',()=>{collarSlider.value='-210';sizeSlider.value='90';horizontalSlider.value='0';refreshCalibration()});refreshCalibration();
 function clear(){ctx.clearRect(0,0,canvas.width,canvas.height)}
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}ctx.setTransform(dpr,0,0,dpr,0,0);return {w:r.width,h:r.height}}
 function point(p,w,h){const vw=video.videoWidth,vh=video.videoHeight;const scale=Math.min(w/vw,h/vh);const dw=vw*scale,dh=vh*scale;return {x:(w-dw)/2+(1-p.x)*dw,y:(h-dh)/2+p.y*dh}}
