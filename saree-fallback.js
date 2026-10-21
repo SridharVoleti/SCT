@@ -33,5 +33,31 @@ toggle.addEventListener('click',()=>{enabled=!enabled;canvas.style.display=enabl
 const observer=new ResizeObserver(paint);observer.observe(canvas.parentElement);
 window.requestAnimationFrame(paint);
 window.setTimeout(paint,300);
+const video=document.getElementById('camera'),start=document.getElementById('start'),stop=document.getElementById('stop');
+let cameraStream=null;
+start.addEventListener('click',async()=>{
+ start.disabled=true;status.textContent='Requesting camera permission…';
+ try{
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error('Camera API unavailable. Open the HTTPS page directly in Chrome.');
+  cameraStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:720},height:{ideal:1280}}});
+  video.srcObject=cameraStream;
+  await video.play();
+  stop.disabled=false;
+  status.textContent='Camera running · adjust saree position using manual controls';
+  paint();
+ }catch(err){
+  cameraStream?.getTracks().forEach(track=>track.stop());cameraStream=null;
+  video.srcObject=null;start.disabled=false;stop.disabled=true;
+  status.textContent='Camera failed: '+(err?.name||'Error')+' — '+(err?.message||'Check camera permission');
+ }
+});
+function stopCamera(){
+ cameraStream?.getTracks().forEach(track=>track.stop());cameraStream=null;
+ video.pause();video.srcObject=null;start.disabled=false;stop.disabled=true;
+ status.textContent='Camera stopped · saree preview available';paint();
+}
+stop.addEventListener('click',stopCamera);
+window.addEventListener('pagehide',()=>{cameraStream?.getTracks().forEach(track=>track.stop())});
+status.textContent='Manual saree ready · press Start full-body mirror to open camera';
 window.__sareeManualFallback=true;
 })();
