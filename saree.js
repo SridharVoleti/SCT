@@ -1,7 +1,8 @@
 import {PoseLandmarker,FilesetResolver} from '@mediapipe/tasks-vision';
 const video=document.getElementById('camera'),canvas=document.getElementById('overlay'),ctx=canvas.getContext('2d'),status=document.getElementById('status'),start=document.getElementById('start'),stop=document.getElementById('stop'),guide=document.getElementById('guide'),select=document.getElementById('saree'),picker=document.getElementById('fabric');
 let poseModel,stream,active=false,landmarks=null,photo=null,lastFrame=-1,lastDetect=0,token=0;
-const palette={rose:['#a52c64','#f7a3ca'],teal:['#096b72','#61d8cb'],gold:['#9b6519','#f5d383']};
+const opacity=document.getElementById('fabric-opacity'),opacityValue=document.getElementById('opacity-value');opacity.addEventListener('input',()=>opacityValue.textContent=opacity.value+'%');
+const palette={yellowpurple:['#eac642','#7650ae'],rose:['#a52c64','#f7a3ca'],teal:['#096b72','#61d8cb'],gold:['#9b6519','#f5d383']};
 function dimensions(){const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);if(canvas.width!==Math.round(r.width*d)||canvas.height!==Math.round(r.height*d)){canvas.width=Math.round(r.width*d);canvas.height=Math.round(r.height*d)}ctx.setTransform(d,0,0,d,0,0);return [r.width,r.height]}
 function pt(p,w,h){const scale=Math.min(w/video.videoWidth,h/video.videoHeight),vw=video.videoWidth*scale,vh=video.videoHeight*scale;return {x:(w-vw)/2+(1-p.x)*vw,y:(h-vh)/2+p.y*vh}}
 function path(points,fill,stroke,width=2){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke()}}
@@ -20,16 +21,26 @@ function draw(w,h){
  const waist=center(lh,rh),knees=center(lk,rk),ankles=center(la,ra);
  const fullBody=ankles.y>h*.72&&Math.min(ls.y,rs.y)<h*.46;
  status.textContent=fullBody?'Body tracked · adjust your position and choose a saree':'Step back until your shoulders, hips and feet are visible';
- const [base,shine]=palette[select.value]||palette.rose;
+ const [base,shine]=palette[select.value]||palette.yellowpurple;
  const leftHip=lh.x<rh.x?lh:rh,rightHip=lh.x<rh.x?rh:lh;
  const leftShoulder=ls.x<rs.x?ls:rs,rightShoulder=ls.x<rs.x?rs:ls;
  const hemY=Math.min(h*.99,Math.max(ankles.y,waist.y+hip*2.2));
  const skirt=[{x:leftHip.x-hip*.18,y:waist.y},{x:rightHip.x+hip*.18,y:waist.y},{x:rightHip.x+hip*.70,y:hemY},{x:leftHip.x-hip*.70,y:hemY}];
- ctx.save();ctx.globalAlpha=.72;path(skirt,base,'#ffe8b7',1.3);
+ ctx.save();ctx.globalAlpha=Number(opacity.value)/100;path(skirt,base,'#ffe8b7',1.3);
  const pallu=[{x:rightShoulder.x-shoulder*.09,y:rightShoulder.y},{x:rightShoulder.x+shoulder*.19,y:rightShoulder.y},{x:rightHip.x+hip*.2,y:waist.y+hip*.25},{x:waist.x-hip*.25,y:waist.y+hip*.24},{x:leftHip.x-hip*.07,y:waist.y},{x:waist.x,y:waist.y-hip*.18}];
  path(pallu,shine,'#fff1c5',1.2);
+ if(select.value==='yellowpurple'){
+  // Distinctive gold zari hem: multiple bands and subtle woven highlights.
+  ctx.save();ctx.beginPath();skirt.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.clip();
+  const borderTop=hemY-Math.max(18,(hemY-waist.y)*.19);const grad=ctx.createLinearGradient(0,borderTop,0,hemY);grad.addColorStop(0,'#c5a24a');grad.addColorStop(.25,'#f8e79b');grad.addColorStop(.62,'#c6a441');grad.addColorStop(1,'#fff0ac');ctx.fillStyle=grad;ctx.fillRect(skirt[3].x,borderTop,skirt[2].x-skirt[3].x,hemY-borderTop);ctx.fillStyle='#fff4bd';ctx.fillRect(skirt[3].x,hemY-5,skirt[2].x-skirt[3].x,3);
+  ctx.strokeStyle='#fff6cb55';ctx.lineWidth=.7;for(let y=borderTop+4;y<hemY;y+=5){ctx.beginPath();ctx.moveTo(skirt[3].x,y);ctx.lineTo(skirt[2].x,y);ctx.stroke()}ctx.restore();
+  // Sparse buttas on the body, clipped to the drape.
+  ctx.save();ctx.beginPath();skirt.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.clip();ctx.fillStyle='#fff2aa99';const step=Math.max(22,hip*.40);for(let y=waist.y+step*.6;y<borderTop-step*.2;y+=step){for(let x=skirt[3].x+step*.5;x<skirt[2].x;x+=step){ctx.beginPath();ctx.ellipse(x+Math.sin(y*.05)*step*.15,y,step*.09,step*.15,-.3,0,Math.PI*2);ctx.fill()}}ctx.restore();
+  // Purple pallu, metallic gold transition bands and small woven detailing.
+  ctx.save();ctx.beginPath();pallu.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.clip();ctx.strokeStyle='#f6d77d';ctx.lineWidth=Math.max(5,shoulder*.065);line({x:rightShoulder.x+shoulder*.10,y:rightShoulder.y},{x:rightHip.x+hip*.12,y:waist.y+hip*.25},'#e8ce79',Math.max(5,shoulder*.065));line({x:rightShoulder.x+shoulder*.15,y:rightShoulder.y},{x:rightHip.x+hip*.18,y:waist.y+hip*.25},'#f9e5a6',2);ctx.restore();
+ }
  for(let i=1;i<=5;i++){const x=skirt[3].x+(skirt[2].x-skirt[3].x)*i/6;line({x:waist.x+(x-waist.x)*.20,y:waist.y+5},{x,y:hemY},'#ffe7b877',1)}
- if(photo?.complete&&photo.naturalWidth){ctx.save();ctx.beginPath();skirt.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.clip();ctx.globalAlpha=.7;ctx.drawImage(photo,skirt[3].x,waist.y,skirt[2].x-skirt[3].x,hemY-waist.y);ctx.restore()}
+ if(photo?.complete&&photo.naturalWidth){ctx.save();ctx.beginPath();skirt.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.clip();ctx.globalAlpha=.26;ctx.drawImage(photo,skirt[3].x,waist.y,skirt[2].x-skirt[3].x,hemY-waist.y);ctx.restore()}
  ctx.restore();
  if(guide.checked){for(const [a,b] of [[ls,rs],[ls,lh],[rs,rh],[lh,rh],[lh,lk],[rh,rk],[lk,la],[rk,ra]])line(a,b,'#8df5db',2);for(const p of [ls,rs,lh,rh,lk,rk,la,ra]){ctx.fillStyle='#a8fff0';ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()}}
 }
