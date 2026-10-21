@@ -44,7 +44,26 @@ function draw(w,h){
  ctx.restore();
  if(guide.checked){for(const [a,b] of [[ls,rs],[ls,lh],[rs,rh],[lh,rh],[lh,lk],[rh,rk],[lk,la],[rk,ra]])line(a,b,'#8df5db',2);for(const p of [ls,rs,lh,rh,lk,rk,la,ra]){ctx.fillStyle='#a8fff0';ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()}}
 }
-async function frame(id){if(!active||id!==token)return;const [w,h]=dimensions();const now=performance.now();if(video.readyState>=2&&now-lastDetect>110&&video.currentTime!==lastFrame){lastFrame=video.currentTime;lastDetect=now;try{landmarks=poseModel.detectForVideo(video,now).landmarks?.[0]||null}catch(e){status.textContent='Tracking unavailable';landmarks=null}}draw(w,h);requestAnimationFrame(()=>frame(id))}
-start.onclick=async()=>{start.disabled=true;status.textContent='Loading full-body tracker…';try{const vision=await FilesetResolver.forVisionTasks('/wasm');poseModel=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'CPU'},runningMode:'VIDEO',numPoses:1});stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:720},height:{ideal:1280}}});video.srcObject=stream;await video.play();active=true;stop.disabled=false;frame(++token)}catch(e){status.textContent='Could not start camera or body tracking. Check permission and network.';start.disabled=false;if(stream)stream.getTracks().forEach(t=>t.stop())}};
-function halt(){active=false;token++;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;landmarks=null;start.disabled=false;stop.disabled=true;status.textContent='Camera off'}stop.onclick=halt;window.addEventListener('pagehide',halt);document.addEventListener('visibilitychange',()=>{if(document.hidden)halt()});
+async function frame(id){if(!active||id!==token)return;const [w,h]=dimensions();const now=performance.now();if(poseModel&&video.readyState>=2&&now-lastDetect>110&&video.currentTime!==lastFrame){lastFrame=video.currentTime;lastDetect=now;try{landmarks=poseModel.detectForVideo(video,now).landmarks?.[0]||null}catch(e){status.textContent='Tracking unavailable';landmarks=null}}draw(w,h);requestAnimationFrame(()=>frame(id))}
+const timeout=(promise,ms)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Tracker load timed out')),ms))]);
+start.onclick=async()=>{
+ start.disabled=true;status.textContent='Opening camera…';
+ const id=++token;
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:720},height:{ideal:1280}}});
+  if(id!==token){stream.getTracks().forEach(t=>t.stop());return}
+  video.srcObject=stream;await video.play();
+  if(id!==token)return;
+  active=true;stop.disabled=false;status.textContent='Mirror ready · loading body tracking…';
+  frame(id);
+ }catch(e){status.textContent='Camera could not open: '+(e?.message||'check permission');start.disabled=false;return}
+ try{
+  const vision=await timeout(FilesetResolver.forVisionTasks('/wasm'),12000);
+  if(id!==token)return;
+  const model=await timeout(PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'CPU'},runningMode:'VIDEO',numPoses:1}),15000);
+  if(id!==token){model.close();return}
+  poseModel=model;status.textContent='Body tracker ready · stand back to align';
+ }catch(e){if(id===token)status.textContent='Mirror active · body tracking failed ('+(e?.message||'network error')+'). Retry with a stable connection.'}
+};
+function halt(){active=false;token++;poseModel?.close();poseModel=null;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;landmarks=null;start.disabled=false;stop.disabled=true;status.textContent='Camera off'}stop.onclick=halt;window.addEventListener('pagehide',halt);document.addEventListener('visibilitychange',()=>{if(document.hidden)halt()});
 picker.onchange=()=>{const f=picker.files?.[0];if(!f)return;if(!f.type.startsWith('image/')||f.size>5*1024*1024){status.textContent='Choose an image under 5 MB';return}const url=URL.createObjectURL(f),img=new Image();img.onload=()=>{if(photo?.dataset?.url)URL.revokeObjectURL(photo.dataset.url);photo=img;img.dataset.url=url;status.textContent='Saree image loaded locally (rough texture preview)'};img.onerror=()=>URL.revokeObjectURL(url);img.src=url};
