@@ -14,17 +14,18 @@ function draw(w,h){
  if(guide.checked){ctx.save();ctx.setLineDash([9,7]);ctx.strokeStyle='#b4f7e1';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(cx,cy-scale*.33,scale*.09,scale*.12,0,0,Math.PI*2);ctx.stroke();line({x:cx-scale*.24,y:cy-scale*.18},{x:cx+scale*.24,y:cy-scale*.18},'#b4f7e1');ctx.beginPath();ctx.moveTo(cx-scale*.24,cy-scale*.18);ctx.lineTo(cx-scale*.17,cy+scale*.12);ctx.lineTo(cx-scale*.14,cy+scale*.47);ctx.moveTo(cx+scale*.24,cy-scale*.18);ctx.lineTo(cx+scale*.17,cy+scale*.12);ctx.lineTo(cx+scale*.14,cy+scale*.47);ctx.stroke();ctx.restore()}
  if(!landmarks||!video.videoWidth)return;
  const ids=[11,12,23,24,25,26,27,28];if(ids.some(i=>!landmarks[i]||(landmarks[i].visibility??1)<.48))return;
- const [ls,rs,lh,rh,lk,rk,la,ra]=ids.map(i=>pt(landmarks[i],w,h));
+ const [ls,rs,lh,rh]=ids.map(i=>pt(landmarks[i],w,h));
+ const lk=landmarks[25]?pt(landmarks[25],w,h):null,rk=landmarks[26]?pt(landmarks[26],w,h):null,la=landmarks[27]?pt(landmarks[27],w,h):null,ra=landmarks[28]?pt(landmarks[28],w,h):null;
  const shoulder=Math.hypot(ls.x-rs.x,ls.y-rs.y),hip=Math.hypot(lh.x-rh.x,lh.y-rh.y);
- if(shoulder<35||hip<20)return;
+ if(shoulder<20||hip<12){status.textContent='Body too small in frame · move closer';return}
  const center=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
- const waist=center(lh,rh),knees=center(lk,rk),ankles=center(la,ra);
- const fullBody=ankles.y>h*.72&&Math.min(ls.y,rs.y)<h*.46;
- status.textContent=fullBody?'Body tracked · adjust your position and choose a saree':'Step back until your shoulders, hips and feet are visible';
+ const waist=center(lh,rh),ankles=la&&ra?center(la,ra):null;
+ const fullBody=Boolean(ankles&&(landmarks[27].visibility??0)>.35&&(landmarks[28].visibility??0)>.35);
+ status.textContent=fullBody?'Body detected ✓ · Saree 001 preview active':'Upper body detected ✓ · saree preview active; step back to see full length';
  const [base,shine]=palette[select.value]||palette.yellowpurple;
  const leftHip=lh.x<rh.x?lh:rh,rightHip=lh.x<rh.x?rh:lh;
  const leftShoulder=ls.x<rs.x?ls:rs,rightShoulder=ls.x<rs.x?rs:ls;
- const hemY=Math.min(h*.99,Math.max(ankles.y,waist.y+hip*2.2));
+ const hemY=Math.min(h*.99,Math.max(fullBody?ankles.y:0,waist.y+Math.max(hip*2.2,shoulder*2.5)));
  const skirt=[{x:leftHip.x-hip*.18,y:waist.y},{x:rightHip.x+hip*.18,y:waist.y},{x:rightHip.x+hip*.70,y:hemY},{x:leftHip.x-hip*.70,y:hemY}];
  ctx.save();ctx.globalAlpha=Number(opacity.value)/100;path(skirt,base,'#ffe8b7',1.3);
  const pallu=[{x:rightShoulder.x-shoulder*.09,y:rightShoulder.y},{x:rightShoulder.x+shoulder*.19,y:rightShoulder.y},{x:rightHip.x+hip*.2,y:waist.y+hip*.25},{x:waist.x-hip*.25,y:waist.y+hip*.24},{x:leftHip.x-hip*.07,y:waist.y},{x:waist.x,y:waist.y-hip*.18}];
@@ -42,7 +43,7 @@ function draw(w,h){
  for(let i=1;i<=5;i++){const x=skirt[3].x+(skirt[2].x-skirt[3].x)*i/6;line({x:waist.x+(x-waist.x)*.20,y:waist.y+5},{x,y:hemY},'#ffe7b877',1)}
  if(photo?.complete&&photo.naturalWidth){ctx.save();ctx.beginPath();skirt.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.clip();ctx.globalAlpha=.26;ctx.drawImage(photo,skirt[3].x,waist.y,skirt[2].x-skirt[3].x,hemY-waist.y);ctx.restore()}
  ctx.restore();
- if(guide.checked){for(const [a,b] of [[ls,rs],[ls,lh],[rs,rh],[lh,rh],[lh,lk],[rh,rk],[lk,la],[rk,ra]])line(a,b,'#8df5db',2);for(const p of [ls,rs,lh,rh,lk,rk,la,ra]){ctx.fillStyle='#a8fff0';ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()}}
+ if(guide.checked){for(const [a,b] of [[ls,rs],[ls,lh],[rs,rh],[lh,rh],...(lk?[[lh,lk]]:[]),...(rk?[[rh,rk]]:[]),...(lk&&la?[[lk,la]]:[]),...(rk&&ra?[[rk,ra]]:[])])line(a,b,'#8df5db',2);for(const p of [ls,rs,lh,rh,lk,rk,la,ra].filter(Boolean)){ctx.fillStyle='#a8fff0';ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()}}
 }
 async function frame(id){if(!active||id!==token)return;const [w,h]=dimensions();const now=performance.now();if(poseModel&&video.readyState>=2&&now-lastDetect>110&&video.currentTime!==lastFrame){lastFrame=video.currentTime;lastDetect=now;try{landmarks=poseModel.detectForVideo(video,now).landmarks?.[0]||null}catch(e){status.textContent='Tracking unavailable';landmarks=null}}draw(w,h);requestAnimationFrame(()=>frame(id))}
 const timeout=(promise,ms)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Tracker load timed out')),ms))]);
