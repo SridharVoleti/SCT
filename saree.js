@@ -1,12 +1,19 @@
 import {PoseLandmarker,FilesetResolver} from '@mediapipe/tasks-vision';
 const video=document.getElementById('camera'),canvas=document.getElementById('overlay'),ctx=canvas.getContext('2d'),status=document.getElementById('status'),start=document.getElementById('start'),stop=document.getElementById('stop'),guide=document.getElementById('guide'),select=document.getElementById('saree'),picker=document.getElementById('fabric');
 let poseModel,stream,active=false,landmarks=null,photo=null,lastFrame=-1,lastDetect=0,token=0;
+const manual=document.getElementById('manual-fit'),manualSize=document.getElementById('manual-size'),manualX=document.getElementById('manual-x'),manualY=document.getElementById('manual-y');let manualMode=true;
+manual.onclick=()=>{manualMode=!manualMode;manual.textContent=manualMode?'Manual fit: ON':'Manual fit: OFF';status.textContent=manualMode?'Manual preview active · adjust position and size':'Auto tracking selected · waiting for body landmarks';renderOnce()};
+for(const el of [manualSize,manualX,manualY])el.addEventListener('input',renderOnce);
 const opacity=document.getElementById('fabric-opacity'),opacityValue=document.getElementById('opacity-value');opacity.addEventListener('input',()=>opacityValue.textContent=opacity.value+'%');
 const palette={yellowpurple:['#eac642','#7650ae'],rose:['#a52c64','#f7a3ca'],teal:['#096b72','#61d8cb'],gold:['#9b6519','#f5d383']};
 function dimensions(){const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);if(canvas.width!==Math.round(r.width*d)||canvas.height!==Math.round(r.height*d)){canvas.width=Math.round(r.width*d);canvas.height=Math.round(r.height*d)}ctx.setTransform(d,0,0,d,0,0);return [r.width,r.height]}
 function pt(p,w,h){const scale=Math.min(w/video.videoWidth,h/video.videoHeight),vw=video.videoWidth*scale,vh=video.videoHeight*scale;return {x:(w-vw)/2+(1-p.x)*vw,y:(h-vh)/2+p.y*vh}}
 function path(points,fill,stroke,width=2){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke()}}
 function line(a,b,color,width=2){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke()}
+function syntheticPose(w,h){const scale=Math.min(w/video.videoWidth,h/video.videoHeight),vw=video.videoWidth*scale,vh=video.videoHeight*scale,ox=(w-vw)/2,oy=(h-vh)/2;
+ const size=Number(manualSize.value)/100,centerX=w*(.5+Number(manualX.value)/100),centerY=h*(.45+Number(manualY.value)/100),shoulder=w*.29*size,hip=w*.22*size;
+ const coords={11:[centerX-shoulder/2,centerY-h*.22*size],12:[centerX+shoulder/2,centerY-h*.22*size],23:[centerX-hip/2,centerY+h*.02*size],24:[centerX+hip/2,centerY+h*.02*size],25:[centerX-hip*.55,centerY+h*.26*size],26:[centerX+hip*.55,centerY+h*.26*size],27:[centerX-hip*.55,centerY+h*.45*size],28:[centerX+hip*.55,centerY+h*.45*size]};const points=[];for(const [id,xy] of Object.entries(coords))points[Number(id)]={x:1-(xy[0]-ox)/vw,y:(xy[1]-oy)/vh,visibility:1};return points}
+function renderOnce(){const [w,h]=dimensions();draw(w,h)}
 function draw(w,h){
  ctx.clearRect(0,0,w,h);
  // Human outline stays visible before the pose model has a reliable full-body track.
@@ -17,11 +24,11 @@ function draw(w,h){
  const [ls,rs,lh,rh]=ids.map(i=>pt(landmarks[i],w,h));
  const lk=landmarks[25]?pt(landmarks[25],w,h):null,rk=landmarks[26]?pt(landmarks[26],w,h):null,la=landmarks[27]?pt(landmarks[27],w,h):null,ra=landmarks[28]?pt(landmarks[28],w,h):null;
  const shoulder=Math.hypot(ls.x-rs.x,ls.y-rs.y),hip=Math.hypot(lh.x-rh.x,lh.y-rh.y);
- if(shoulder<20||hip<12){status.textContent='Body too small in frame · move closer';return}
+ if(shoulder<20||hip<12){status.textContent='Body too small in frame · adjust Manual fit size';landmarks=trackingLandmarks;return}
  const center=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
  const waist=center(lh,rh),ankles=la&&ra?center(la,ra):null;
  const fullBody=Boolean(ankles&&(landmarks[27].visibility??0)>.35&&(landmarks[28].visibility??0)>.35);
- status.textContent=fullBody?'Body detected ✓ · Saree 001 preview active':'Upper body detected ✓ · saree preview active; step back to see full length';
+ if(!manualMode)status.textContent=fullBody?'Body detected ✓ · Saree preview active':'Upper body detected ✓ · saree preview active';
  const [base,shine]=palette[select.value]||palette.yellowpurple;
  const leftHip=lh.x<rh.x?lh:rh,rightHip=lh.x<rh.x?rh:lh;
  const leftShoulder=ls.x<rs.x?ls:rs,rightShoulder=ls.x<rs.x?rs:ls;
@@ -44,8 +51,9 @@ function draw(w,h){
  if(photo?.complete&&photo.naturalWidth){ctx.save();ctx.beginPath();skirt.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.clip();ctx.globalAlpha=.26;ctx.drawImage(photo,skirt[3].x,waist.y,skirt[2].x-skirt[3].x,hemY-waist.y);ctx.restore()}
  ctx.restore();
  if(guide.checked){for(const [a,b] of [[ls,rs],[ls,lh],[rs,rh],[lh,rh],...(lk?[[lh,lk]]:[]),...(rk?[[rh,rk]]:[]),...(lk&&la?[[lk,la]]:[]),...(rk&&ra?[[rk,ra]]:[])])line(a,b,'#8df5db',2);for(const p of [ls,rs,lh,rh,lk,rk,la,ra].filter(Boolean)){ctx.fillStyle='#a8fff0';ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()}}
+ landmarks=trackingLandmarks;
 }
-async function frame(id){if(!active||id!==token)return;const [w,h]=dimensions();const now=performance.now();if(poseModel&&video.readyState>=2&&now-lastDetect>110&&video.currentTime!==lastFrame){lastFrame=video.currentTime;lastDetect=now;try{landmarks=poseModel.detectForVideo(video,now).landmarks?.[0]||null}catch(e){status.textContent='Tracking unavailable';landmarks=null}}draw(w,h);requestAnimationFrame(()=>frame(id))}
+async function frame(id){if(!active||id!==token)return;const [w,h]=dimensions();const now=performance.now();if(!manualMode&&poseModel&&video.readyState>=2&&now-lastDetect>110&&video.currentTime!==lastFrame){lastFrame=video.currentTime;lastDetect=now;try{landmarks=poseModel.detectForVideo(video,now).landmarks?.[0]||null}catch(e){status.textContent='Tracking unavailable';landmarks=null}}draw(w,h);requestAnimationFrame(()=>frame(id))}
 const timeout=(promise,ms)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Tracker load timed out')),ms))]);
 start.onclick=async()=>{
  start.disabled=true;status.textContent='Opening camera…';
@@ -55,7 +63,7 @@ start.onclick=async()=>{
   if(id!==token){stream.getTracks().forEach(t=>t.stop());return}
   video.srcObject=stream;await video.play();
   if(id!==token)return;
-  active=true;stop.disabled=false;status.textContent='Mirror ready · loading body tracking…';
+  active=true;stop.disabled=false;status.textContent='Mirror ready · manual saree preview active';
   frame(id);
  }catch(e){status.textContent='Camera could not open: '+(e?.message||'check permission');start.disabled=false;return}
  try{
@@ -63,8 +71,8 @@ start.onclick=async()=>{
   if(id!==token)return;
   const model=await timeout(PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'CPU'},runningMode:'VIDEO',numPoses:1}),15000);
   if(id!==token){model.close();return}
-  poseModel=model;status.textContent='Body tracker ready · stand back to align';
- }catch(e){if(id===token)status.textContent='Mirror active · body tracking failed ('+(e?.message||'network error')+'). Retry with a stable connection.'}
+  poseModel=model;if(!manualMode)status.textContent='Body tracker ready · stand back to align';
+ }catch(e){if(id===token)status.textContent='Mirror active · manual fit available; automatic tracking failed: '+(e?.message||'network error')}
 };
 function halt(){active=false;token++;poseModel?.close();poseModel=null;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;landmarks=null;start.disabled=false;stop.disabled=true;status.textContent='Camera off'}stop.onclick=halt;window.addEventListener('pagehide',halt);document.addEventListener('visibilitychange',()=>{if(document.hidden)halt()});
 picker.onchange=()=>{const f=picker.files?.[0];if(!f)return;if(!f.type.startsWith('image/')||f.size>5*1024*1024){status.textContent='Choose an image under 5 MB';return}const url=URL.createObjectURL(f),img=new Image();img.onload=()=>{if(photo?.dataset?.url)URL.revokeObjectURL(photo.dataset.url);photo=img;img.dataset.url=url;status.textContent='Saree image loaded locally (rough texture preview)'};img.onerror=()=>URL.revokeObjectURL(url);img.src=url};
